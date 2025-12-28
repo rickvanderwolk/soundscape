@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="nl" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soundscape</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Top Toolbar -->
+    <div class="toolbar">
+        <!-- Color Palette -->
+        <div class="color-palette" id="colorPalette"></div>
+
+        <!-- Spacer -->
+        <div class="spacer"></div>
+
+        <!-- Controls -->
+        <button class="icon-btn" id="brushSmaller" title="Penseel kleiner">−</button>
+        <button class="icon-btn" id="brushLarger" title="Penseel groter">+</button>
+        <button class="icon-btn" id="undoBtn" title="Ongedaan maken">↶</button>
+        <button class="icon-btn" id="clearBtn" title="Wissen">✕</button>
+    </div>
+
+    <!-- Full Canvas -->
+    <canvas id="drawingCanvas"></canvas>
+
+    <!-- Start Overlay (alleen mobiel) -->
+    <div id="startOverlay" class="start-overlay">
+        <div class="start-content">
+            <button id="startButton" class="start-button">▶</button>
+        </div>
+    </div>
+
+    <script src="ambient-audio-engine.js"></script>
+    <script src="canvas-engine.js"></script>
+    <script src="sound-mapper.js"></script>
+    <script src="playback.js"></script>
+    <script src="ui.js"></script>
+</body>
+</html>
