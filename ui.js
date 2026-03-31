@@ -17,7 +17,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Op touch devices, toon de overlay meteen
     if (isTouchDevice && startOverlay) {
-        console.log('[UI] Touch device detected, showing start button');
         startOverlay.style.display = 'flex';
     }
 
@@ -25,69 +24,46 @@ document.addEventListener('DOMContentLoaded', () => {
     async function initAudio() {
         if (!audioInitialized) {
             try {
-                console.log('[Audio] Initializing audio engine...');
                 audioEngine.init();
-                console.log('[Audio] Initial audio context state:', audioEngine.audioContext.state);
 
                 // Force resume to ensure context starts (critical for Safari/iOS)
                 if (audioEngine.audioContext) {
-                    console.log('[Audio] Calling resume on audio context...');
                     await audioEngine.audioContext.resume();
 
-                    // Give Safari/iOS time to actually start the context
                     let retries = 0;
                     while (audioEngine.audioContext.state !== 'running' && retries < 5) {
-                        console.log(`[Audio] Waiting for running state... (attempt ${retries + 1}, current: ${audioEngine.audioContext.state})`);
                         await new Promise(resolve => setTimeout(resolve, 100));
                         await audioEngine.audioContext.resume();
                         retries++;
                     }
-
-                    console.log('[Audio] Final audio context state:', audioEngine.audioContext.state);
                 }
 
-                // Only proceed if we have a running context
                 if (audioEngine.audioContext.state === 'running') {
-                    console.log('[Audio] ✓ Audio context is running, playing test sound...');
-
-                    // Play test sound to "unlock" audio
                     audioEngine.playInstrumentByName('sparkle', undefined, 0.5);
 
                     audioInitialized = true;
 
-                    // Give the test sound a moment to actually play
                     await new Promise(resolve => setTimeout(resolve, 100));
 
-                    // Hide overlay if visible
                     if (startOverlay && !startOverlay.classList.contains('hidden')) {
                         startOverlay.classList.add('hidden');
-                        console.log('[UI] Overlay hidden');
                     }
 
-                    // Start playback
-                    console.log('[Playback] Starting playback engine...');
                     playbackEngine.start();
-                    console.log('[Playback] ✓ Playback started');
 
-                    return true; // Success
+                    return true;
                 } else {
-                    console.error('[Audio] ✗ Audio context failed to start, state:', audioEngine.audioContext.state);
-                    return false; // Failed
+                    return false;
                 }
             } catch (error) {
                 console.error('[Audio] Error initializing audio:', error);
-                return false; // Failed
+                return false;
             }
         } else if (audioEngine.audioContext && audioEngine.audioContext.state === 'suspended') {
-            // If already initialized but suspended, just resume
-            console.log('[Audio] Audio was suspended, resuming...');
             try {
                 await audioEngine.audioContext.resume();
-                console.log('[Audio] Resumed, state:', audioEngine.audioContext.state);
 
-                // Start playback if not playing
                 if (!playbackEngine.isPlaying && audioEngine.audioContext.state === 'running') {
-                    console.log('[Playback] Starting playback after resume...');
                     playbackEngine.start();
                 }
                 return true;
@@ -96,8 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return false;
             }
         } else if (!playbackEngine.isPlaying && audioEngine.audioContext && audioEngine.audioContext.state === 'running') {
-            // Already initialized and running, just start playback if needed
-            console.log('[Playback] Audio already running, starting playback...');
             playbackEngine.start();
             return true;
         }
@@ -114,7 +88,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Op desktop: automatisch bij eerste interactie
     if (!isTouchDevice) {
-        console.log('[UI] Desktop detected, auto-init on first click');
         const autoInit = async () => {
             await initAudio();
         };
@@ -126,7 +99,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('visibilitychange', async () => {
         if (!document.hidden && audioInitialized && audioEngine.audioContext) {
             if (audioEngine.audioContext.state === 'suspended') {
-                console.log('[Audio] Page visible again, resuming audio...');
                 try {
                     await audioEngine.audioContext.resume();
                     if (!playbackEngine.isPlaying) {

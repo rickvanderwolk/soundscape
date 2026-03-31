@@ -80,13 +80,7 @@ class SoundMapper {
 
         // Trigger the sound
         if (!this.audioEngine.audioContext) {
-            console.warn('[SoundMapper] Audio context not initialized');
             return null;
-        }
-
-        // Log occasionally to verify sounds are playing
-        if (Math.random() < 0.05) { // 5% of the time
-            console.log(`[SoundMapper] 🎨 Drawing ${instrument} at (${Math.floor(x)}, ${Math.floor(y)}) vol:${volume.toFixed(2)}`);
         }
 
         this.audioEngine.playInstrumentByName(instrument, undefined, volume);
@@ -146,10 +140,6 @@ class SoundMapper {
         // Map Y position to volume (inverted: top = louder)
         const normalizedY = 1 - (y / canvasHeight);
         const volume = 0.3 + (normalizedY * 0.5); // Range: 0.3 to 0.8
-
-        // Always log when we find a colored pixel during playback
-        console.log(`[SoundMapper] ✓ Found ${instrument} at (${x}, ${y}) RGBA: ${r} ${g} ${b} vol:${volume.toFixed(2)}`);
-
 
         return {
             instrument,
