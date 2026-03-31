@@ -90,7 +90,10 @@ class PlaybackEngine {
                         this.soundMapper.audioEngine.playInstrumentByName(
                             soundParams.instrument,
                             undefined,
-                            soundParams.volume * 0.8
+                            soundParams.volume * 0.8,
+                            soundParams.pitch,
+                            soundParams.pan,
+                            soundParams.reverbMix
                         );
                     } else if (audioContext && audioContext.state === 'suspended') {
                         audioContext.resume().catch(() => {});

@@ -83,11 +83,23 @@ class SoundMapper {
             return null;
         }
 
-        this.audioEngine.playInstrumentByName(instrument, undefined, volume);
+        // Map Y position to pitch (top = high, bottom = low)
+        const pitch = normalizedY;
+
+        // Map X position to stereo pan (-1 left, 1 right)
+        const pan = (x / canvasWidth) * 2 - 1;
+
+        // Map X position to reverb mix (center = dry, edges = wet)
+        const distFromCenter = Math.abs(x / canvasWidth - 0.5) * 2; // 0 center, 1 edges
+        const reverbMix = 0.2 + distFromCenter * 0.6; // 0.2 - 0.8
+
+        this.audioEngine.playInstrumentByName(instrument, undefined, volume, pitch, pan, reverbMix);
 
         return {
             instrument,
             volume,
+            pitch,
+            pan,
             x,
             y
         };
@@ -137,13 +149,26 @@ class SoundMapper {
 
         const instrument = this.getInstrumentForColor(closestColor);
 
-        // Map Y position to volume (inverted: top = louder)
+        // Map Y position to pitch (top = high, bottom = low)
         const normalizedY = 1 - (y / canvasHeight);
-        const volume = 0.3 + (normalizedY * 0.5); // Range: 0.3 to 0.8
+        const pitch = normalizedY;
+
+        // Volume based on position
+        const volume = 0.4 + (normalizedY * 0.3); // Range: 0.4 to 0.7
+
+        // Map X position to stereo pan (-1 left, 1 right)
+        const pan = (x / canvasWidth) * 2 - 1;
+
+        // Map X position to reverb mix (center = dry, edges = wet)
+        const distFromCenter = Math.abs(x / canvasWidth - 0.5) * 2;
+        const reverbMix = 0.2 + distFromCenter * 0.6;
 
         return {
             instrument,
             volume,
+            pitch,
+            pan,
+            reverbMix,
             color: closestColor,
             x,
             y

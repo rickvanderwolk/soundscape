@@ -12,7 +12,7 @@ class AmbientAudioEngine {
 
         // Node tracking to prevent resource exhaustion
         this.activeNodes = 0;
-        this.maxActiveNodes = 120;
+        this.maxActiveNodes = 200;
 
         // Cached noise buffers (reused instead of recreated)
         this.noiseBuffers = {};
@@ -35,7 +35,7 @@ class AmbientAudioEngine {
         this.compressor.release.value = 0.15;
 
         this.masterGain = this.audioContext.createGain();
-        this.masterGain.gain.value = 0.8;
+        this.masterGain.gain.value = 0.6;
 
         // Create reverb for ambient feel
         this.createReverb();
@@ -93,18 +93,60 @@ class AmbientAudioEngine {
         this.reverb = this.audioContext.createConvolver();
         this.reverb.buffer = impulse;
 
-        // Connect reverb to master gain
         this.reverb.connect(this.masterGain);
+    }
+
+    /**
+     * Create output chain with panning and dry/wet reverb mix
+     * Returns a node to connect sources into
+     * pan: -1 (left) to 1 (right)
+     * reverbMix: 0 (dry) to 1 (full reverb)
+     */
+    createOutputChain(pan = 0, reverbMix = 0.5) {
+        const ctx = this.audioContext;
+
+        if (!this.acquireNode(4)) return null;
+
+        const input = ctx.createGain();
+        input.gain.value = 1;
+
+        const panner = ctx.createStereoPanner();
+        panner.pan.value = pan;
+
+        const dryGain = ctx.createGain();
+        dryGain.gain.value = Math.cos(reverbMix * Math.PI * 0.5);
+
+        const wetGain = ctx.createGain();
+        wetGain.gain.value = Math.sin(reverbMix * Math.PI * 0.5);
+
+        input.connect(panner);
+        panner.connect(dryGain);
+        panner.connect(wetGain);
+
+        dryGain.connect(this.masterGain);
+        wetGain.connect(this.reverb);
+
+        // Auto-disconnect after longest possible sound (3s) + margin
+        setTimeout(() => {
+            input.disconnect();
+            panner.disconnect();
+            dryGain.disconnect();
+            wetGain.disconnect();
+            this.releaseNodes(4);
+        }, 4000);
+
+        return input;
     }
 
     /**
      * Drone - Lange aanhoudende toon
      */
-    playDrone(time = 0, volume = 1) {
+    playDrone(time = 0, volume = 1, pitch = 0.5, output) {
         const ctx = this.audioContext;
         const t = time || ctx.currentTime;
         const duration = 2.0;
-        const freqs = [220, 220.5, 221];
+        const pitchMult = 0.5 + pitch * 1.5;
+        const freqs = [220 * pitchMult, 220.5 * pitchMult, 221 * pitchMult];
 
         if (!this.acquireNode(freqs.length)) return;
 
@@ -121,7 +163,7 @@ class AmbientAudioEngine {
             gain.gain.linearRampToValueAtTime(0, t + duration);
 
             osc.connect(gain);
-            gain.connect(this.reverb);
+            gain.connect(output);
 
             osc.start(t);
             osc.stop(t + duration);
@@ -132,22 +174,23 @@ class AmbientAudioEngine {
     /**
      * Shimmer - Hoge, sprankelende tonen
      */
-    playShimmer(time = 0, volume = 1) {
+    playShimmer(time = 0, volume = 1, pitch = 0.5, output) {
         if (!this.acquireNode(1)) return;
         const ctx = this.audioContext;
         const t = time || ctx.currentTime;
         const duration = 1.5;
+        const pitchMult = 0.5 + pitch * 1.5;
 
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         const filter = ctx.createBiquadFilter();
 
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(1200, t);
-        osc.frequency.exponentialRampToValueAtTime(2400, t + duration);
+        osc.frequency.setValueAtTime(1200 * pitchMult, t);
+        osc.frequency.exponentialRampToValueAtTime(2400 * pitchMult, t + duration);
 
         filter.type = 'highpass';
-        filter.frequency.setValueAtTime(800, t);
+        filter.frequency.setValueAtTime(800 * pitchMult, t);
 
         gain.gain.setValueAtTime(0, t);
         gain.gain.linearRampToValueAtTime(volume * 0.4, t + 0.1);
@@ -155,7 +198,7 @@ class AmbientAudioEngine {
 
         osc.connect(filter);
         filter.connect(gain);
-        gain.connect(this.reverb);
+        gain.connect(output);
 
         osc.start(t);
         osc.stop(t + duration);
@@ -165,13 +208,14 @@ class AmbientAudioEngine {
     /**
      * Pad - Warme, zachte achtergrondtoon
      */
-    playPad(time = 0, volume = 1) {
+    playPad(time = 0, volume = 1, pitch = 0.5, output) {
         const harmonics = [1, 1.5, 2, 3];
         if (!this.acquireNode(harmonics.length)) return;
         const ctx = this.audioContext;
         const t = time || ctx.currentTime;
         const duration = 2.5;
-        const baseFreq = 130;
+        const pitchMult = 0.5 + pitch * 1.5;
+        const baseFreq = 130 * pitchMult;
 
         harmonics.forEach((ratio, i) => {
             const osc = ctx.createOscillator();
@@ -186,7 +230,7 @@ class AmbientAudioEngine {
             gain.gain.linearRampToValueAtTime(0, t + duration);
 
             osc.connect(gain);
-            gain.connect(this.reverb);
+            gain.connect(output);
 
             osc.start(t);
             osc.stop(t + duration);
@@ -197,8 +241,9 @@ class AmbientAudioEngine {
     /**
      * Bell - Klokachtig, resonerend geluid
      */
-    playBell(time = 0, volume = 1) {
-        const frequencies = [800, 1200, 1600, 2000];
+    playBell(time = 0, volume = 1, pitch = 0.5, output) {
+        const pitchMult = 0.5 + pitch * 1.5;
+        const frequencies = [800 * pitchMult, 1200 * pitchMult, 1600 * pitchMult, 2000 * pitchMult];
         if (!this.acquireNode(frequencies.length)) return;
         const ctx = this.audioContext;
         const t = time || ctx.currentTime;
@@ -215,7 +260,7 @@ class AmbientAudioEngine {
             gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
 
             osc.connect(gain);
-            gain.connect(this.reverb);
+            gain.connect(output);
 
             osc.start(t);
             osc.stop(t + duration);
@@ -226,11 +271,12 @@ class AmbientAudioEngine {
     /**
      * Wind - Ruisachtig windgeluid
      */
-    playWind(time = 0, volume = 1) {
+    playWind(time = 0, volume = 1, pitch = 0.5, output) {
         if (!this.acquireNode(1)) return;
         const ctx = this.audioContext;
         const t = time || ctx.currentTime;
         const duration = 2.0;
+        const pitchMult = 0.5 + pitch * 1.5;
 
         const noise = ctx.createBufferSource();
         const filter = ctx.createBiquadFilter();
@@ -239,8 +285,8 @@ class AmbientAudioEngine {
         noise.buffer = this.getNoiseBuffer(duration);
 
         filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(400, t);
-        filter.frequency.linearRampToValueAtTime(800, t + duration);
+        filter.frequency.setValueAtTime(400 * pitchMult, t);
+        filter.frequency.linearRampToValueAtTime(800 * pitchMult, t + duration);
         filter.Q.value = 1;
 
         gain.gain.setValueAtTime(0, t);
@@ -249,7 +295,7 @@ class AmbientAudioEngine {
 
         noise.connect(filter);
         filter.connect(gain);
-        gain.connect(this.reverb);
+        gain.connect(output);
 
         noise.start(t);
         noise.stop(t + duration);
@@ -259,10 +305,11 @@ class AmbientAudioEngine {
     /**
      * Rain - Regendruppels
      */
-    playRain(time = 0, volume = 1) {
+    playRain(time = 0, volume = 1, pitch = 0.5, output) {
         if (!this.acquireNode(3)) return;
         const ctx = this.audioContext;
         const t = time || ctx.currentTime;
+        const pitchMult = 0.5 + pitch * 1.5;
 
         for (let i = 0; i < 3; i++) {
             const delay = Math.random() * 0.05;
@@ -271,7 +318,7 @@ class AmbientAudioEngine {
             const filter = ctx.createBiquadFilter();
 
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(1500 + Math.random() * 500, t + delay);
+            osc.frequency.setValueAtTime((1500 + Math.random() * 500) * pitchMult, t + delay);
 
             filter.type = 'highpass';
             filter.frequency.value = 1000;
@@ -281,7 +328,7 @@ class AmbientAudioEngine {
 
             osc.connect(filter);
             filter.connect(gain);
-            gain.connect(this.masterGain);
+            gain.connect(output);
 
             osc.start(t + delay);
             osc.stop(t + delay + 0.1);
@@ -292,11 +339,12 @@ class AmbientAudioEngine {
     /**
      * Ocean - Golfgeluid
      */
-    playOcean(time = 0, volume = 1) {
+    playOcean(time = 0, volume = 1, pitch = 0.5, output) {
         if (!this.acquireNode(1)) return;
         const ctx = this.audioContext;
         const t = time || ctx.currentTime;
         const duration = 3.0;
+        const pitchMult = 0.5 + pitch * 1.5;
 
         const noise = ctx.createBufferSource();
         const filter = ctx.createBiquadFilter();
@@ -305,9 +353,9 @@ class AmbientAudioEngine {
         noise.buffer = this.getNoiseBuffer(duration);
 
         filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(200, t);
-        filter.frequency.linearRampToValueAtTime(400, t + duration / 2);
-        filter.frequency.linearRampToValueAtTime(200, t + duration);
+        filter.frequency.setValueAtTime(200 * pitchMult, t);
+        filter.frequency.linearRampToValueAtTime(400 * pitchMult, t + duration / 2);
+        filter.frequency.linearRampToValueAtTime(200 * pitchMult, t + duration);
 
         gain.gain.setValueAtTime(0, t);
         gain.gain.linearRampToValueAtTime(volume * 0.15, t + 0.5);
@@ -315,7 +363,7 @@ class AmbientAudioEngine {
 
         noise.connect(filter);
         filter.connect(gain);
-        gain.connect(this.reverb);
+        gain.connect(output);
 
         noise.start(t);
         noise.stop(t + duration);
@@ -325,24 +373,25 @@ class AmbientAudioEngine {
     /**
      * Sparkle - Korte, hoge tonen
      */
-    playSparkle(time = 0, volume = 1) {
+    playSparkle(time = 0, volume = 1, pitch = 0.5, output) {
         if (!this.acquireNode(2)) return;
         const ctx = this.audioContext;
         const t = time || ctx.currentTime;
+        const pitchMult = 0.5 + pitch * 1.5;
 
         for (let i = 0; i < 2; i++) {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
 
             osc.type = 'sine';
-            const freq = 2000 + Math.random() * 2000;
+            const freq = (2000 + Math.random() * 2000) * pitchMult;
             osc.frequency.setValueAtTime(freq, t + i * 0.05);
 
             gain.gain.setValueAtTime(volume * 0.35, t + i * 0.05);
             gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.05 + 0.3);
 
             osc.connect(gain);
-            gain.connect(this.reverb);
+            gain.connect(output);
 
             osc.start(t + i * 0.05);
             osc.stop(t + i * 0.05 + 0.3);
@@ -353,23 +402,24 @@ class AmbientAudioEngine {
     /**
      * Swoosh - Sweeping geluid
      */
-    playSwoosh(time = 0, volume = 1) {
+    playSwoosh(time = 0, volume = 1, pitch = 0.5, output) {
         if (!this.acquireNode(1)) return;
         const ctx = this.audioContext;
         const t = time || ctx.currentTime;
         const duration = 1.2;
+        const pitchMult = 0.5 + pitch * 1.5;
 
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         const filter = ctx.createBiquadFilter();
 
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(100, t);
-        osc.frequency.exponentialRampToValueAtTime(800, t + duration);
+        osc.frequency.setValueAtTime(100 * pitchMult, t);
+        osc.frequency.exponentialRampToValueAtTime(800 * pitchMult, t + duration);
 
         filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(200, t);
-        filter.frequency.exponentialRampToValueAtTime(2000, t + duration);
+        filter.frequency.setValueAtTime(200 * pitchMult, t);
+        filter.frequency.exponentialRampToValueAtTime(2000 * pitchMult, t + duration);
 
         gain.gain.setValueAtTime(0, t);
         gain.gain.linearRampToValueAtTime(volume * 0.2, t + 0.1);
@@ -377,7 +427,7 @@ class AmbientAudioEngine {
 
         osc.connect(filter);
         filter.connect(gain);
-        gain.connect(this.reverb);
+        gain.connect(output);
 
         osc.start(t);
         osc.stop(t + duration);
@@ -387,11 +437,12 @@ class AmbientAudioEngine {
     /**
      * Breath - Ademachtig geluid
      */
-    playBreath(time = 0, volume = 1) {
+    playBreath(time = 0, volume = 1, pitch = 0.5, output) {
         if (!this.acquireNode(1)) return;
         const ctx = this.audioContext;
         const t = time || ctx.currentTime;
         const duration = 1.5;
+        const pitchMult = 0.5 + pitch * 1.5;
 
         const noise = ctx.createBufferSource();
         const filter = ctx.createBiquadFilter();
@@ -400,7 +451,7 @@ class AmbientAudioEngine {
         noise.buffer = this.getNoiseBuffer(duration);
 
         filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(600, t);
+        filter.frequency.setValueAtTime(600 * pitchMult, t);
         filter.Q.value = 2;
 
         gain.gain.setValueAtTime(0, t);
@@ -409,7 +460,7 @@ class AmbientAudioEngine {
 
         noise.connect(filter);
         filter.connect(gain);
-        gain.connect(this.reverb);
+        gain.connect(output);
 
         noise.start(t);
         noise.stop(t + duration);
@@ -419,8 +470,9 @@ class AmbientAudioEngine {
     /**
      * Crystal - Kristalachtig geluid
      */
-    playCrystal(time = 0, volume = 1) {
-        const freqs = [1100, 1650, 2200];
+    playCrystal(time = 0, volume = 1, pitch = 0.5, output) {
+        const pitchMult = 0.5 + pitch * 1.5;
+        const freqs = [1100 * pitchMult, 1650 * pitchMult, 2200 * pitchMult];
         if (!this.acquireNode(freqs.length)) return;
         const ctx = this.audioContext;
         const t = time || ctx.currentTime;
@@ -438,7 +490,7 @@ class AmbientAudioEngine {
             gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
 
             osc.connect(gain);
-            gain.connect(this.reverb);
+            gain.connect(output);
 
             osc.start(t);
             osc.stop(t + duration);
@@ -449,22 +501,23 @@ class AmbientAudioEngine {
     /**
      * Void - Diep, zwevend geluid
      */
-    playVoid(time = 0, volume = 1) {
+    playVoid(time = 0, volume = 1, pitch = 0.5, output) {
         if (!this.acquireNode(1)) return;
         const ctx = this.audioContext;
         const t = time || ctx.currentTime;
         const duration = 3.0;
+        const pitchMult = 0.5 + pitch * 1.5;
 
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         const filter = ctx.createBiquadFilter();
 
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(55, t);
-        osc.frequency.linearRampToValueAtTime(50, t + duration);
+        osc.frequency.setValueAtTime(55 * pitchMult, t);
+        osc.frequency.linearRampToValueAtTime(50 * pitchMult, t + duration);
 
         filter.type = 'lowpass';
-        filter.frequency.value = 200;
+        filter.frequency.value = 200 * pitchMult;
 
         gain.gain.setValueAtTime(0, t);
         gain.gain.linearRampToValueAtTime(volume * 0.2, t + 0.8);
@@ -472,7 +525,7 @@ class AmbientAudioEngine {
 
         osc.connect(filter);
         filter.connect(gain);
-        gain.connect(this.reverb);
+        gain.connect(output);
 
         osc.start(t);
         osc.stop(t + duration);
@@ -482,48 +535,51 @@ class AmbientAudioEngine {
     /**
      * Play instrument by name
      */
-    playInstrumentByName(instrumentName, time = 0, volume = 1) {
+    playInstrumentByName(instrumentName, time = 0, volume = 1, pitch = 0.5, pan = 0, reverbMix = 0.5) {
         if (!this.audioContext) return;
+
+        const output = this.createOutputChain(pan, reverbMix);
+        if (!output) return;
 
         switch(instrumentName) {
             case 'drone':
-                this.playDrone(time, volume);
+                this.playDrone(time, volume, pitch, output);
                 break;
             case 'shimmer':
-                this.playShimmer(time, volume);
+                this.playShimmer(time, volume, pitch, output);
                 break;
             case 'pad':
-                this.playPad(time, volume);
+                this.playPad(time, volume, pitch, output);
                 break;
             case 'bell':
-                this.playBell(time, volume);
+                this.playBell(time, volume, pitch, output);
                 break;
             case 'wind':
-                this.playWind(time, volume);
+                this.playWind(time, volume, pitch, output);
                 break;
             case 'rain':
-                this.playRain(time, volume);
+                this.playRain(time, volume, pitch, output);
                 break;
             case 'ocean':
-                this.playOcean(time, volume);
+                this.playOcean(time, volume, pitch, output);
                 break;
             case 'sparkle':
-                this.playSparkle(time, volume);
+                this.playSparkle(time, volume, pitch, output);
                 break;
             case 'swoosh':
-                this.playSwoosh(time, volume);
+                this.playSwoosh(time, volume, pitch, output);
                 break;
             case 'breath':
-                this.playBreath(time, volume);
+                this.playBreath(time, volume, pitch, output);
                 break;
             case 'crystal':
-                this.playCrystal(time, volume);
+                this.playCrystal(time, volume, pitch, output);
                 break;
             case 'void':
-                this.playVoid(time, volume);
+                this.playVoid(time, volume, pitch, output);
                 break;
             default:
-                this.playDrone(time, volume);
+                this.playDrone(time, volume, pitch, output);
         }
     }
 }
